@@ -1,0 +1,216 @@
+#include <Elegoo_GFX.h>    // Core graphics library
+#include <Elegoo_TFTLCD.h> // Hardware-specific library
+
+/*
+VERSION 0.3 
+-Added Green LED For Best Round
+*/
+
+#define LCD_CS A3 // Chip Select goes to Analog 3
+#define LCD_CD A2 // Command/Data goes to Analog 2
+#define LCD_WR A1 // LCD Write goes to Analog 1
+#define LCD_RD A0 // LCD Read goes to Analog 0
+
+#define LCD_RESET A4 // Can alternately just connect to Arduino's reset pin
+
+
+// Assign human-readable names to some common 16-bit color values:
+#define  BLACK   0x0000
+#define BLUE    0x001F
+#define RED     0xF800
+#define GREEN   0x07E0
+#define CYAN    0x07FF
+#define MAGENTA 0xF81F
+#define YELLOW  0xFFE0
+#define WHITE   0xFFFF
+
+
+
+
+// PIN CONFIGURATION
+Elegoo_TFTLCD lcd(LCD_CS, LCD_CD, LCD_WR, LCD_RD, LCD_RESET);
+
+int laserPin = 13;
+
+
+
+int state = 1;
+boolean displayLastRound = false;
+boolean running = false;
+boolean flag=false;
+
+int lightLevel = 0;
+long lastHit = 0; //time of the last hit in the barrier (absolut)
+boolean lock; // locks the light barrier while a car is passing. The look is removed as soon the car left the lightbeam and the roundTreshold time has passed
+
+long lastRound = 0; // time of the lastround (absolut)
+long bestRound = 0; // time of the bestround (relative)
+int roundNr = 0;
+int loopCnt=0;
+
+
+int laserTreshold = 10;
+int roundTreshold = 300; // minimum time that has to pass before a new round is counted
+
+// Absolut time for pressing buttons
+long lastPress1 = 0;
+long lastPress2 = 0;
+
+
+void setup() {
+  pinMode(laserPin, OUTPUT);
+  
+  // set up the LCD's number of columns and rows: 
+  // Initialise the LCD display
+  lcd.reset();
+  
+  uint16_t identifier = lcd.readID();
+  identifier=0x9341;
+  lcd.begin(identifier);
+
+  lcd.fillScreen(BLACK);
+
+  lcd.setCursor(0, 0);
+  lcd.setTextColor(RED);  lcd.setTextSize(2);
+  lcd.println("Arduino");
+ 
+  lcd.println("Laser Lap Timer  ");
+  
+  delay(1500);
+  
+  Serial.begin(9600);
+  delay(1500);
+
+}
+
+void loop() {
+
+  
+  for (loopCnt=0; loopCnt<450;loopCnt++)
+  {
+    lcd.fillScreen(BLACK);
+    lcd.setTextColor(RED);  lcd.setTextSize(2);
+    switch (state){
+    case 0: 
+      statePaused(); 
+      break;
+    case 1: 
+      stateCountdown(); 
+     delay(800);
+      break;
+    case 2: 
+      stateRunning(); 
+      delay(300);
+      break;
+    }
+  }
+  exit(0);
+}
+
+void didFinishRound(){
+  
+  if(roundNr > 0)lastRound = millis()-lastHit;
+  //lcd.println("lastRound value: ");
+  //lcd.print(lastRound);
+
+  if (bestRound == 0){
+    bestRound = lastRound;
+  }
+  if (lastRound < bestRound){
+    bestRound = lastRound;
+  }
+  lastHit = millis();
+  lock = true;  
+  ++roundNr;
+  if(roundNr>1){
+    displayLastRound = true;  
+  } 
+
+}
+
+void statePaused(){
+  
+  digitalWrite(laserPin,LOW);
+  lcd.setCursor(0, 0);
+  lcd.println("Press right   ");
+  lcd.setCursor(0, 1);
+ // lcd.print("button to start");
+
+}
+
+void stateRunning(){
+   lcd.setCursor(0,0);
+  //switch laser on
+  digitalWrite(laserPin,HIGH);
+
+  //mesasure light
+
+  lightLevel = analogRead(A5);
+  lcd.println();
+ // lcd.print("Lightlevel:   ");    
+  //lcd.println(lightLevel);
+ // lightLevel = map(lightLevel, 0, 900, 0, 255);
+ // lightLevel = constrain(lightLevel, 0, 255);
+
+  if(lightLevel >= 200)
+   {
+       //flag=true;
+        lcd.println("Object detected!!");
+        // digitalWrite(ledPin,HIGH);
+        if (millis()-lastHit > roundTreshold){
+           didFinishRound();
+        }
+    }else{
+      lcd.println("No object detected!");
+    
+    }
+        displaySecondLine();
+        displayFirstLine();
+  
+    
+    state=2;
+
+}
+
+void stateCountdown(){
+  
+  lcd.setCursor(0, 0);
+  lcd.println("Ready             ");
+  delay(1000);
+  lcd.println("Set             ");
+  delay(1000);
+  lcd.println("Go............");
+  digitalWrite(laserPin,HIGH);
+  state = 2;
+
+}
+
+
+
+void displayFirstLine(){
+
+  lcd.println();
+  lcd.print("RoundNr :");
+  lcd.print(" ");
+  lcd.print(roundNr);
+  lcd.println();
+  lcd.print("Current Lap :");
+  lcd.print(" ");
+  lcd.print((float)(millis()-lastHit)/1000);
+  lcd.print("s");
+
+  lcd.print("                       ");
+
+}
+
+void displaySecondLine(){
+
+    lcd.println();
+    // lcd.setCursor(0, 1);
+    lcd.print("Previous Lap: ");
+    lcd.print(" ");
+    lcd.print((float)lastRound/1000);
+    lcd.print("s");
+    lcd.print("                       ");
+
+}
